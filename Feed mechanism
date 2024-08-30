@@ -1,0 +1,134 @@
+package org.firstinspires.ftc.robotcontroller;
+
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.util.ElapsedTime;
+
+@TeleOp(name="BasicMecham", group="Iterative OpMode")
+public class BasicMecham extends OpMode {
+    // Declare OpMode members.
+    private ElapsedTime runtime = new ElapsedTime();
+    private DcMotor frontLeft = null;
+    private DcMotor backLeft = null;
+    private DcMotor frontRight = null;
+    private DcMotor backRight = null;
+    private DcMotor ms = null; // Motor without encoder
+    private DcMotor ms2 = null; // New motor to be controlled by A button
+    private boolean turning = false;
+    private double turnStartTime = 0.0;
+    private static final double TURN_DURATION = 0.7; // Adjust this value based on your robot's turning speed
+    private static final double MOTOR_RUN_DURATION = 2.0; // Duration in seconds for ms motor rotation
+    private boolean isMotorRunning = false;
+    private boolean motorDirection = false; // False for counterclockwise, true for clockwise
+    private boolean xButtonPressed = false;
+    private double motorStartTime = 0.0;
+    private boolean aButtonPressed = false; // Add this declaration
+    private boolean isMs2Running = false; // Track if ms2 is running
+
+    @Override
+    public void init() {
+        frontLeft  = hardwareMap.get(DcMotor.class, "front_Left");
+        backLeft  = hardwareMap.get(DcMotor.class, "back_Left");
+
+        frontRight = hardwareMap.get(DcMotor.class, "front_Right");
+        backRight = hardwareMap.get(DcMotor.class, "back_Right");
+
+        ms = hardwareMap.get(DcMotor.class, "ms"); // Initialize the ms motor
+        ms2 = hardwareMap.get(DcMotor.class, "ms2"); // Initialize the new ms2 motor
+
+        // Set the direction for motors if necessary
+        frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        backRight.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // Tell the driver that initialization is complete.
+        telemetry.addData("Status", "Initialized");
+    }
+
+    @Override
+    public void init_loop() {
+    }
+
+    @Override
+    public void start() {
+        runtime.reset();
+    }
+
+    @Override
+    public void loop() {
+        // Setup a variable for each drive wheel to save power level for telemetry
+        double frontLeftPower;
+        double backLeftPower;
+
+        double frontRightPower;
+        double backRightPower;
+
+        double y = -gamepad1.left_stick_y;
+        double x =  gamepad1.left_stick_x;
+
+        // Check if the A button is pressed to toggle ms2 motor
+        if (gamepad1.a && !aButtonPressed) {
+            isMs2Running = !isMs2Running;
+            ms2.setPower(isMs2Running ? 1.0 : 0.0); // Toggle ms2 motor power
+            aButtonPressed = true;
+        } else if (!gamepad1.a) {
+            aButtonPressed = false;
+        }
+
+        double turn = 0.0;
+
+        // Handle turning logic
+        if (turning) {
+            turn = -TURN_DURATION; // Set turning power
+            if (runtime.seconds() - turnStartTime >= TURN_DURATION) {
+                turning = false; // Stop turning
+            }
+        }
+
+        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(turn), 1);
+
+        frontLeftPower = (y + x + turn) / denominator;
+        backLeftPower  = (y - x + turn) / denominator;
+
+        frontRightPower = (y - x - turn) / denominator;
+        backRightPower  = (y + x - turn) / denominator;
+
+        frontLeft.setPower(frontLeftPower);
+        backLeft.setPower(backLeftPower);
+
+        frontRight.setPower(frontRightPower);
+        backRight.setPower(backRightPower);
+
+        // Toggle ms motor direction using the X button
+        if (gamepad1.x && !xButtonPressed) {
+            motorDirection = !motorDirection;
+            isMotorRunning = true;
+            motorStartTime = runtime.seconds();
+            xButtonPressed = true;
+            ms.setPower(motorDirection ? -1.0 : 1.0); // Set motor power based on direction
+        } else if (!gamepad1.x) {
+            xButtonPressed = false;
+        }
+
+        // Check if the ms motor should stop
+        if (isMotorRunning && runtime.seconds() - motorStartTime >= MOTOR_RUN_DURATION) {
+            ms.setPower(0.0); // Stop the ms motor
+            isMotorRunning = false;
+        }
+
+        // Show the elapsed game time and motor status.
+        telemetry.addData("Status", "Run Time: " + runtime.toString());
+        telemetry.addData("Left", "front (%.2f), back (%.2f)", frontLeftPower, backLeftPower);
+        telemetry.addData("Right", "front (%.2f), back (%.2f)", frontRightPower, backRightPower);
+        telemetry.addData("MS Motor Direction", motorDirection ? "Clockwise" : "Counterclockwise");
+        telemetry.addData("MS Motor Power", ms.getPower());
+        telemetry.addData("MS2 Motor Power", isMs2Running ? "Running" : "Stopped");
+    }
+
+    @Override
+    public void stop() {
+        ms.setPower(0.0); // Ensure ms motor is stopped
+        ms2.setPower(0.0); // Ensure ms2 motor is stopped
+    }
+}
